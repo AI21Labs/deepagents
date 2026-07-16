@@ -1,4 +1,4 @@
-"""QuickJS adapter for the Deep Agents `task` subagent tool."""
+"""Python REPL adapter for the Deep Agents `task` subagent tool."""
 
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ _EVENT_LABEL_FALLBACK_MAX_CHARS = 60
 
 
 class SubagentStartEvent(TypedDict):
-    """A subagent began running inside a `js_eval` call."""
+    """A subagent began running inside an `eval` call."""
 
     id: str
     """Per-dispatch id, stable across this subagent's start/complete/error."""
@@ -64,13 +64,13 @@ class SubagentStartEvent(TypedDict):
     """Lifecycle phase for this event."""
 
     eval_id: NotRequired[str]
-    """Parent `js_eval` tool-call id, used to group a fan-out by batch.
+    """Parent `eval` tool-call id, used to group a fan-out by batch.
 
     Omitted when the runtime exposes no `tool_call_id`.
     """
 
     subagent_type: str
-    """The dispatched subagent type (the `subagentType` argument)."""
+    """The dispatched subagent type (the `subagent_type` argument)."""
 
     label: str
     """Short row label; falls back to a compact description when unset."""
@@ -80,7 +80,7 @@ class SubagentStartEvent(TypedDict):
 
 
 class SubagentCompleteEvent(TypedDict):
-    """A subagent finished successfully inside a `js_eval` call."""
+    """A subagent finished successfully inside an `eval` call."""
 
     id: str
     """Per-dispatch id, matching the corresponding `start` event."""
@@ -92,14 +92,14 @@ class SubagentCompleteEvent(TypedDict):
     """Lifecycle phase for this event."""
 
     eval_id: NotRequired[str]
-    """Parent `js_eval` tool-call id; omitted when the runtime exposes none."""
+    """Parent `eval` tool-call id; omitted when the runtime exposes none."""
 
     duration_ms: int
     """Wall-clock duration of the subagent, in milliseconds."""
 
 
 class SubagentErrorEvent(TypedDict):
-    """A subagent raised before returning inside a `js_eval` call."""
+    """A subagent raised before returning inside an `eval` call."""
 
     id: str
     """Per-dispatch id, matching the corresponding `start` event."""
@@ -111,7 +111,7 @@ class SubagentErrorEvent(TypedDict):
     """Lifecycle phase for this event."""
 
     eval_id: NotRequired[str]
-    """Parent `js_eval` tool-call id; omitted when the runtime exposes none."""
+    """Parent `eval` tool-call id; omitted when the runtime exposes none."""
 
     duration_ms: int
     """Wall-clock duration before the failure, in milliseconds."""
@@ -121,7 +121,7 @@ class SubagentErrorEvent(TypedDict):
 
 
 SubagentStreamEvent = SubagentStartEvent | SubagentCompleteEvent | SubagentErrorEvent
-"""One lifecycle event for a subagent dispatched from inside `js_eval`.
+"""One lifecycle event for a subagent dispatched from inside `eval`.
 
 Emitted on LangGraph's `custom` stream so UIs can render a live fan-out panel.
 A `phase`-discriminated union: `start` carries the descriptive fields,
@@ -187,7 +187,7 @@ def _tool_input_field_names(tool: BaseTool) -> frozenset[str]:
     return frozenset()
 
 
-async def call_subagent_task_tool(
+def call_subagent_task_tool(
     task_tool: BaseTool,
     *,
     description: str,
@@ -196,7 +196,7 @@ async def call_subagent_task_tool(
     runtime: Any,
     label: str | None = None,
 ) -> Any:
-    """Call the Deep Agents task tool and return a JavaScript-friendly value.
+    """Call the Deep Agents task tool synchronously and return its value.
 
     This also emits `start` then `complete`/`error` subagent lifecycle
     events on the custom stream.
@@ -234,7 +234,7 @@ async def call_subagent_task_tool(
 
     started_at = time.monotonic()
     try:
-        result = await task_tool.arun(
+        result = task_tool.run(
             {
                 "description": description,
                 "subagent_type": subagent_type,

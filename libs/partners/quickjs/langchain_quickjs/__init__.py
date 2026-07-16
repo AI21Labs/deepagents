@@ -1,4 +1,4 @@
-"""langchain-quickjs: persistent JS REPL middleware for agents."""
+"""langchain-quickjs: persistent Python REPL middleware for agents."""
 
 from langchain_quickjs._ptc import PTCOption
 from langchain_quickjs._subagent import (

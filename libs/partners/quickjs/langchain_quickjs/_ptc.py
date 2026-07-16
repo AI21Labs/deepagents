@@ -1,23 +1,19 @@
 """Programmatic tool calling (PTC) support for `CodeInterpreterMiddleware`.
 
-PTC exposes the agent's LangChain tools inside the JavaScript REPL as
-`tools.<camelCaseName>(input)` async functions. Instead of issuing
-N serial tool calls, the model writes one `eval` that loops / parallelises
-/ chains tools in-code:
+PTC exposes the agent's LangChain tools inside the Python REPL as
+`tools.<name>(input)` *synchronous* functions. Instead of issuing N serial
+tool calls, the model writes one `eval` that loops / chains tools in-code:
 
-    const [a, b] = await Promise.all([
-        tools.search({query: "foo"}),
-        tools.search({query: "bar"}),
-    ]);
+    results = [tools.search({"query": q}) for q in ("foo", "bar")]
 
 Two pieces live here:
 
 - filtering — turn the live agent toolset into the subset exposed to PTC
-- prompt rendering — render a short TS-ish API-reference block describing
+- prompt rendering — render a short Python API-reference block describing
     each exposed tool, so the model knows the call shape
 
-The host-function bridge that actually invokes each tool lives in
-`_repl.py` next to the rest of the context wiring.
+The bridge that actually invokes each tool lives in `_repl.py` next to the
+rest of the REPL wiring.
 """
 
 from __future__ import annotations
@@ -38,10 +34,9 @@ _RESERVED_SUBAGENT_TASK_NAME = "task"
 
 _TASK_IN_PTC_MSG = (
     "The subagent `task` tool cannot be exposed via `ptc`. It is always "
-    "available as the top-level `task()` global inside the REPL (with "
-    "`subagentType`, `label`, and `responseSchema` support); exposing it through "
+    "available as the top-level `task()` function; also exposing it under "
     "the `tools.*` namespace would create a second, conflicting dispatch path "
-    'that drops `responseSchema`. Remove "task" from `ptc`.'
+    'that drops `response_schema`. Remove "task" from `ptc`.'
 )
 
 
@@ -53,30 +48,29 @@ def filter_tools_for_ptc(
 ) -> list[BaseTool]:
     """Return the subset of `tools` exposed inside the REPL.
 
-    `self_tool_name` is the REPL's own tool name; it is *always* excluded
-    to prevent the model from recursing `tools.eval("tools.eval(...)")`.
-    If the model wants a nested eval, it can just write nested code in one
-    call — that's the whole point of PTC.
+    `self_tool_name` is the REPL's own tool name; it is *always* excluded to
+    prevent the model from recursing `tools.eval("tools.eval(...)")`. If the
+    model wants a nested eval, it can just write nested code in one call —
+    that's the whole point of PTC.
 
     `config` is allowlist-only:
 
     - `str` entries: expose matching tool names from `tools`.
-    - `BaseTool` entries: expose those tools directly (minus
-        `self_tool_name`).
+    - `BaseTool` entries: expose those tools directly (minus `self_tool_name`).
 
-    Mixed lists are supported and merged. Explicit `BaseTool` entries
-    are included first, then name-matched agent tools are appended.
-    Duplicate tool names are deduplicated.
+    Mixed lists are supported and merged. Explicit `BaseTool` entries are
+    included first, then name-matched agent tools are appended. Duplicate tool
+    names are deduplicated.
 
-    The subagent `task` tool is reserved and may not appear in `config`
-    (by name or instance) — it is always available as the `task()` global,
-    so a `tools.task` PTC variant would be a conflicting, degraded duplicate.
-    A `"task"` entry raises `ValueError`.
+    The subagent `task` tool is reserved and may not appear in `config` (by
+    name or instance) — it is always available as the `task()` global, so a
+    `tools.task` PTC variant would be a conflicting, degraded duplicate. A
+    `"task"` entry raises `ValueError`.
 
     Warning:
-        PTC tool calls execute through the REPL bridge and currently do
-        not respect `interrupt_on` / HITL approval hooks for each
-        individual tool invocation.
+        PTC tool calls execute through the REPL bridge and currently do not
+        respect `interrupt_on` / HITL approval hooks for each individual tool
+        invocation.
     """
     if isinstance(config, list):
         explicit_tools: list[BaseTool] = []
@@ -116,30 +110,24 @@ def filter_tools_for_ptc(
     raise TypeError(msg)
 
 
-def to_camel_case(name: str) -> str:
-    """Convert `snake_case` / `kebab-case` → `camelCase`."""
-    return _prompt.to_camel_case(name)
-
-
-def is_valid_js_identifier(name: str) -> bool:
-    """Return whether `name` is a valid JavaScript identifier."""
-    return _prompt.is_valid_js_identifier(name)
+def is_valid_python_identifier(name: str) -> bool:
+    """Return whether `name` is a valid, non-keyword Python identifier."""
+    return _prompt.is_valid_python_identifier(name)
 
 
 def is_valid_ptc_tool_name(name: str) -> bool:
-    """Return whether a tool can be exposed as `tools.<camelCaseName>`."""
+    """Return whether a tool can be exposed as `tools.<name>`."""
     return _prompt.is_valid_ptc_tool_name(name)
 
 
 def _raise_on_invalid_ptc_tools(tools: Sequence[BaseTool]) -> None:
     for tool in tools:
-        camel = to_camel_case(tool.name)
-        if is_valid_js_identifier(camel):
+        if is_valid_python_identifier(tool.name):
             continue
         msg = (
-            f"PTC tool name {tool.name!r} cannot be exposed as JavaScript "
-            f"identifier {camel!r}. Tool names must map to "
-            "`/^[A-Za-z_$][A-Za-z0-9_$]*$/`."
+            f"PTC tool name {tool.name!r} cannot be exposed as a Python "
+            "attribute on the `tools` namespace. Tool names must be valid, "
+            "non-keyword Python identifiers."
         )
         raise ValueError(msg)
 

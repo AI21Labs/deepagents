@@ -2129,7 +2129,7 @@ async def _run_acp_cli_async(
         agent_graph, _backend = create_cli_agent(
             model=model_result.model,
             assistant_id=assistant_id,
-            tools=tools,
+            tools=[],
             mcp_server_info=mcp_server_info,
             checkpointer=InMemorySaver(),
             async_subagents=async_subagents,

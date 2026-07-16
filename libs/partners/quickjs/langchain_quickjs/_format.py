@@ -1,73 +1,74 @@
-"""Formatting and output-coercion helpers for the QuickJS REPL."""
+"""Formatting and output-coercion helpers for the Python REPL."""
 
 from __future__ import annotations
 
 import json
+import reprlib
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import ToolMessage
 from langgraph.types import Command
 from pydantic import BaseModel
-from quickjs_rs import UNDEFINED
 
 if TYPE_CHECKING:
     from langchain_quickjs._repl import EvalOutcome
 
 _TRUNCATE_MARKER = "… [truncated {n} chars]"
 
-
-def format_handle(handle: Any) -> str:
-    """Describe a `Handle` value in REPL-style shorthand."""
-    kind = handle.type_of
-    if kind == "function":
-        try:
-            arity_h = handle.get("length")
-            try:
-                arity = arity_h.to_python()
-            finally:
-                arity_h.dispose()
-        except Exception:  # noqa: BLE001 — best-effort
-            return "[Function]"
-        return f"[Function] arity={arity}"
-    return f"[{kind}]"
+# `repr` of a compound result can be arbitrarily large; bound the per-value
+# rendering so a single stray object cannot blow up the returned block before
+# the outer `max_result_chars` truncation even runs.
+_repr = reprlib.Repr()
+_repr.maxstring = 4_000
+_repr.maxother = 4_000
+_repr.maxlist = 100
+_repr.maxdict = 100
+_repr.maxtuple = 100
+_repr.maxset = 100
+_repr.maxlevel = 6
 
 
 def stringify(value: Any) -> str:
-    """Best-effort string form for a console arg or eval result."""
-    return _format_jsvalue(value)
+    """Best-effort string form for an eval result.
 
-
-def _format_jsvalue(value: Any) -> str:
-    if value is None:
-        return "null"
-    if value is UNDEFINED:
-        return "undefined"
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, float):
-        if value.is_integer():
-            return str(int(value))
-        return str(value)
+    Strings render as themselves (no surrounding quotes) so the model reads
+    them cleanly; every other value goes through a bounded `repr` so the
+    Python literal shape stays visible (lists as `[...]`, dicts as `{...}`).
+    """
     if isinstance(value, str):
         return value
+    try:
+        return _repr.repr(value)
+    except Exception:  # noqa: BLE001 — rendering must not raise into the REPL
+        return object.__repr__(value)
+
+
+def coerce_tool_output_for_ptc(value: Any) -> Any:
+    """Coerce a tool result for the PTC bridge, preserving native types.
+
+    The Python REPL hands tool results straight back to user code, so we
+    only need to unwrap LangChain's `ToolMessage` / `Command` envelopes
+    (matching `coerce_tool_output`'s selection rules) and normalize Pydantic
+    models to plain dicts. Everything else is returned unchanged so the model
+    can index / iterate / compute on the native value.
+    """
+    if isinstance(value, Command):
+        return coerce_tool_output_for_ptc(_extract_command_content(value))
+    if isinstance(value, ToolMessage):
+        return coerce_tool_output_for_ptc(value.content)
     if isinstance(value, list):
-        return "[" + ", ".join(_format_nested(v) for v in value) + "]"
-    if isinstance(value, dict):
-        return (
-            "{" + ", ".join(f"{k}: {_format_nested(v)}" for k, v in value.items()) + "}"
-        )
-    return repr(value)
-
-
-def _format_nested(value: Any) -> str:
-    """Like `_format_jsvalue` but quotes nested strings."""
-    if isinstance(value, str):
-        return f'"{value}"'
-    return _format_jsvalue(value)
+        for entry in reversed(value):
+            if isinstance(entry, ToolMessage):
+                return coerce_tool_output_for_ptc(entry.content)
+            if isinstance(entry, Command):
+                return coerce_tool_output_for_ptc(_extract_command_content(entry))
+    if isinstance(value, BaseModel):
+        return value.model_dump()
+    return value
 
 
 def coerce_tool_output(value: Any) -> str:
-    """Coerce arbitrary tool return values to the JS-visible string output."""
+    """Coerce arbitrary tool return values to a string form."""
     if isinstance(value, str):
         return value
     if isinstance(value, Command):
@@ -81,58 +82,6 @@ def coerce_tool_output(value: Any) -> str:
             if isinstance(entry, Command):
                 return _coerce_command_output(entry)
     return _coerce_message_content(value)
-
-
-# Scalar types the quickjs_rs binding marshals natively. Compound shapes
-# (`dict` / `list` / `tuple`) are walked recursively in
-# `_coerce_for_marshal`; anything else becomes `str(value)` so the JS
-# side can still see a usable value.
-_NATIVE_JS_SCALARS = (str, bool, int, float, type(None))
-
-
-def coerce_tool_output_for_ptc(value: Any) -> Any:
-    """Coerce a tool result for the PTC bridge, preserving native types.
-
-    The quickjs_rs `register` bridge marshals Python primitives, `list`,
-    and `dict` directly to native JS values, so the model can use them
-    without an explicit `JSON.parse`. This helper unwraps LangChain's
-    `ToolMessage` / `Command` envelopes (matching `coerce_tool_output`'s
-    selection rules) and returns the underlying value typed.
-
-    Compound returns are walked recursively: nested values that the binding
-    cannot marshal natively (`datetime`, Pydantic models, custom classes)
-    are stringified in place via `str(value)` so the surrounding object
-    structure remains navigable from JS. Cyclic structures hit Python's
-    recursion limit and surface as a host error in the eval — same outcome
-    as `json.dumps` on a self-referencing dict.
-    """
-    if isinstance(value, Command):
-        return coerce_tool_output_for_ptc(_extract_command_content(value))
-    if isinstance(value, ToolMessage):
-        return coerce_tool_output_for_ptc(value.content)
-    if isinstance(value, list):
-        for entry in reversed(value):
-            if isinstance(entry, ToolMessage):
-                return coerce_tool_output_for_ptc(entry.content)
-            if isinstance(entry, Command):
-                return coerce_tool_output_for_ptc(_extract_command_content(entry))
-    return _coerce_for_marshal(value)
-
-
-def _coerce_for_marshal(value: Any) -> Any:
-    """Convert *value* into a shape the quickjs_rs bridge can marshal."""
-    if isinstance(value, _NATIVE_JS_SCALARS):
-        return value
-    if isinstance(value, dict):
-        return {str(k): _coerce_for_marshal(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_coerce_for_marshal(v) for v in value]
-    # Pydantic models are dumped to a plain dict so the JS side sees the
-    # field shape its return-type signature advertises (rather than
-    # `str(model)`). Nested models / datetimes are handled by recursion.
-    if isinstance(value, BaseModel):
-        return _coerce_for_marshal(value.model_dump())
-    return str(value)
 
 
 def _extract_command_content(command: Command) -> Any:
@@ -191,18 +140,17 @@ def format_outcome(
         parts.append(f"<stdout>\n{stdout}\n</stdout>")
     if outcome.error_type is not None:
         inner = outcome.error_message
-        if outcome.error_stack:
-            inner = f"{inner}\n{outcome.error_stack}"
+        if outcome.error_traceback:
+            inner = f"{inner}\n{outcome.error_traceback}"
         parts.append(
             f'<error type="{_xml_escape(outcome.error_type)}">'
             f"{_xml_escape(_truncate(inner, max_result_chars))}"
             f"</error>"
         )
     else:
-        body = outcome.result if outcome.result is not None else "undefined"
-        kind_attr = f' kind="{outcome.result_kind}"' if outcome.result_kind else ""
+        body = outcome.result if outcome.result is not None else "None"
         body_xml = _xml_escape(_truncate(body, max_result_chars))
-        parts.append(f"<result{kind_attr}>{body_xml}</result>")
+        parts.append(f"<result>{body_xml}</result>")
     return "\n".join(parts)
 
 

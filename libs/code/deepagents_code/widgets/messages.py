@@ -1189,6 +1189,17 @@ class ToolCallMessage(Vertical):
             Content.styled(text, theme.get_theme_colors(self).warning)
         )
 
+    def _elapsed_label(self) -> str | None:
+        """Return the human-readable elapsed time since the tool started running.
+
+        Returns:
+            Formatted duration (e.g. `"5s"`, `"2m 3s"`), or `None` if the tool
+            was never started with a recorded start time.
+        """
+        if self._start_time is None:
+            return None
+        return format_duration(time() - self._start_time)
+
     def pause_running(self) -> None:
         """Pause the running spinner while the tool awaits a user decision.
 
@@ -1224,8 +1235,21 @@ class ToolCallMessage(Vertical):
         self._output = _strip_success_exit_line(result)
         if self._status_widget:
             self._status_widget.remove_class("pending")
-            # Hide status on success - output speaks for itself
-            self._status_widget.display = False
+            elapsed = self._elapsed_label()
+            if elapsed is not None:
+                # Replace the "Running..." spinner with the final duration so
+                # the user can see how long the tool took.
+                self._status_widget.add_class("success")
+                checkmark = get_glyphs().checkmark
+                colors = theme.get_theme_colors(self)
+                self._status_widget.update(
+                    Content.styled(f"{checkmark} Ran for {elapsed}", colors.success)
+                )
+                self._status_widget.display = True
+            else:
+                # No recorded start time (e.g. hydrated from data) — hide the
+                # status, the output speaks for itself.
+                self._status_widget.display = False
         self._update_output_display()
 
     def set_error(self, error: str) -> None:
