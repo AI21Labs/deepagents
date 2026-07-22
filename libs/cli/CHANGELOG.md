@@ -4,6 +4,23 @@
 
 From 0.2.0 onward, `deepagents-cli` exposes `init`, `deploy`, `agents`, and `mcp-servers` against the Managed Deep Agents `/v1/deepagents/*` API. The coding agent (interactive TUI & headless CLI) moved to [`deepagents-code`](https://github.com/langchain-ai/deepagents/blob/main/libs/code/CHANGELOG.md).
 
+## [0.3.0](https://github.com/AI21Labs/deepagents/compare/deepagents-cli==0.2.2...deepagents-cli==0.3.0) (2026-07-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* **cli:** `deepagents deploy` now targets the Managed Deep Agents API; `deepagents dev`, `deepagents.toml`, and the `--config`/`--dry-run` flags are removed. Run `deepagents init` to re-scaffold (`agent.json` + `tools.json`). See [PR](https://github.com/langchain-ai/deepagents/pull/3609) for the full migration guide.
+
+### Features
+
+* **cli:** migrate deepagents deploy to use managed deep agents api [AB-2470] ([#3609](https://github.com/AI21Labs/deepagents/issues/3609)) ([72aef52](https://github.com/AI21Labs/deepagents/commit/72aef52542a3fd4a7eebcb3dba40e28adf1aa044))
+* **sdk:** surface subagents via inherited `lc_agent_name` projection ([e0a1ed2](https://github.com/AI21Labs/deepagents/commit/e0a1ed24e6b44c31d0aac3358aeee0d6cb66b2c4))
+
+
+### Bug Fixes
+
+* **cli:** support `state` deploy backend ([#3790](https://github.com/AI21Labs/deepagents/issues/3790)) ([04b4bb9](https://github.com/AI21Labs/deepagents/commit/04b4bb946fc5ff914b8cccc8c9543d10533de0f8))
+
 ## [0.2.2](https://github.com/langchain-ai/deepagents/compare/deepagents-cli==0.2.1...deepagents-cli==0.2.2) (2026-06-07)
 
 
