@@ -2,6 +2,23 @@
 
 # Changelog
 
+## [0.3.8](https://github.com/AI21Labs/deepagents/compare/langchain-quickjs==0.3.7...langchain-quickjs==0.3.8) (2026-09-23)
+
+
+### Features
+
+* **quickjs:** stream PTC tool calls natively ([#5735](https://github.com/AI21Labs/deepagents/issues/5735)) ([c366c49](https://github.com/AI21Labs/deepagents/commit/c366c495129a67629a4477c51e0d1dec778d36e3))
+
+
+### Bug Fixes
+
+* **quickjs:** keep private state out of subagent propagation ([#3543](https://github.com/AI21Labs/deepagents/issues/3543)) ([916d7d7](https://github.com/AI21Labs/deepagents/commit/916d7d740563f8cc7e16299d5aba88f9467473de))
+
+
+### Performance Improvements
+
+* **code,quickjs:** omit middleware trace inputs ([#6015](https://github.com/AI21Labs/deepagents/issues/6015)) ([673844d](https://github.com/AI21Labs/deepagents/commit/673844d06fe0ee186f2e492c3c0a19ec5facffc2))
+
 ## [0.3.7](https://github.com/langchain-ai/deepagents/compare/langchain-quickjs==0.3.6...langchain-quickjs==0.3.7) (2026-09-06)
 
 ### Features
