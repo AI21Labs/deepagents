@@ -1031,8 +1031,10 @@ SANDBOX_EXTRAS: frozenset[str] = frozenset(
 )
 """Optional extras that add sandbox integrations."""
 
-STANDALONE_EXTRAS: frozenset[str] = frozenset({"media", "quickjs"})
+STANDALONE_EXTRAS: frozenset[str] = frozenset({"media", "quickjs", "teel"})
 """Optional extras that don't fit the provider/sandbox taxonomy.
+
+`teel` adds the sandboxed Python interpreter backend (`langchain-teel`).
 
 `quickjs` is a core dependency as of 0.1.24, but the empty extra remains
 installable so older `deepagents-code[quickjs]` and `/install quickjs` workflows
@@ -1440,43 +1442,80 @@ def resolve_install_hint(
     return InstallHint(extra=None, command=command)
 
 
-def verify_interpreter_deps() -> None:
-    """Check that `langchain-quickjs` is installed for the interpreter.
+def _module_importable(module: str) -> bool:
+    """Return whether `module` can be found, without importing it."""
+    try:
+        return importlib.util.find_spec(module) is not None
+    except (ImportError, ValueError):
+        # A broken-but-installed package (e.g., its parent raises during
+        # import) would otherwise masquerade as "not installed"; capture the
+        # underlying cause for debug logs.
+        logger.debug("find_spec failed for %s", module, exc_info=True)
+        return False
+
+
+def verify_interpreter_deps(
+    backend: str = "quickjs", *, python_wasm: str | None = None
+) -> None:
+    """Check that the configured interpreter backend can start.
 
     Uses `importlib.util.find_spec` for a lightweight check with no actual
     imports. Call this in the app process *before* spawning the server
     subprocess so users get a clear, actionable error instead of an opaque
-    server crash when the core dependency is missing or broken.
+    server crash when a dependency or the teel `python.wasm` is missing.
 
-    Returns silently when the package is importable.
+    Returns silently when the backend is ready.
+
+    Args:
+        backend: `quickjs` (core dependency) or `teel` (the `teel` extra).
+        python_wasm: Path to teel's `python.wasm`; checked for the `teel` backend.
 
     Raises:
-        ImportError: If `langchain_quickjs` is not importable.
+        ImportError: If the backend's package is not importable.
+        ValueError: If the `teel` backend's `python.wasm` does not exist.
     """
-    try:
-        found = importlib.util.find_spec("langchain_quickjs") is not None
-    except (ImportError, ValueError):
-        # A broken-but-installed `langchain_quickjs` (e.g., parent package
-        # raises during import) would otherwise masquerade as "not installed";
-        # capture the underlying cause for debug logs.
-        logger.debug("find_spec failed for langchain_quickjs", exc_info=True)
-        found = False
-
-    if not found:
-        from deepagents_code.config import _is_editable_install
-
-        if _is_editable_install():
+    if backend == "teel":
+        _require_teel_extra()
+        if not python_wasm or not Path(python_wasm).expanduser().is_file():
             msg = (
-                "Missing core dependency for the interpreter. Editable install "
-                "detected — refresh the local environment with uv sync, or "
-                "relaunch with --no-interpreter to skip it."
+                f"interpreter.python_wasm ({python_wasm or 'unset'}) is not a "
+                "file. Point it at teel's python.wasm, or relaunch with "
+                "--no-interpreter."
             )
-        else:
-            msg = (
-                "Missing core dependency for the interpreter. "
-                "Reinstall dcode to restore langchain-quickjs, or relaunch with "
-                "--no-interpreter to skip it."
-            )
+            raise ValueError(msg)
+        return
+    if _module_importable("langchain_quickjs"):
+        return
+
+    from deepagents_code.config import _is_editable_install
+
+    if _is_editable_install():
+        msg = (
+            "Missing core dependency for the interpreter. Editable install "
+            "detected — refresh the local environment with uv sync, or "
+            "relaunch with --no-interpreter to skip it."
+        )
+    else:
+        msg = (
+            "Missing core dependency for the interpreter. "
+            "Reinstall dcode to restore langchain-quickjs, or relaunch with "
+            "--no-interpreter to skip it."
+        )
+    raise ImportError(msg)
+
+
+def _require_teel_extra() -> None:
+    """Check that the `teel` extra (`langchain-teel`) is installed.
+
+    Raises:
+        ImportError: If `langchain_teel` is not importable.
+    """
+    if not _module_importable("langchain_teel"):
+        msg = (
+            "interpreter.backend='teel' needs the `teel` extra (langchain-teel). "
+            "Install it, set interpreter.backend='quickjs', or relaunch with "
+            "--no-interpreter."
+        )
         raise ImportError(msg)
 
 

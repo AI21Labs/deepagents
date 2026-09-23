@@ -982,6 +982,46 @@ preset already excludes them; this is the belt-and-braces check for `"all"`.
 """
 
 
+def _build_interpreter_middleware(
+    interpreter: InterpreterConfig, *, ptc: list[str] | None
+) -> AgentMiddleware[Any, Any, Any]:
+    """Build the code-interpreter middleware for the configured backend.
+
+    Args:
+        interpreter: Resolved interpreter settings, including the backend.
+        ptc: Tool names exposed as `tools.*`, or `None` to disable PTC.
+
+    Returns:
+        `js_eval` backed by QuickJS, or `py_eval` backed by teel's sandboxed
+        CPython.
+
+    Raises:
+        ImportError: If the `teel` backend is selected without `langchain-teel`.
+    """
+    options: dict[str, Any] = {
+        "timeout": interpreter.timeout_seconds,
+        "memory_limit": interpreter.memory_limit_mb * 1024 * 1024,
+        "max_ptc_calls": interpreter.max_ptc_calls,
+        "max_result_chars": interpreter.max_result_chars,
+        "ptc": ptc,
+    }
+    if interpreter.backend == "teel":
+        try:
+            from langchain_teel import CodeInterpreterMiddleware as TeelMiddleware
+        except ImportError as exc:
+            msg = (
+                "interpreter.backend='teel' needs the `teel` extra "
+                "(langchain-teel); install it or set interpreter.backend='quickjs'"
+            )
+            raise ImportError(msg) from exc
+        # `InterpreterConfig` guarantees `python_wasm` for the teel backend.
+        python_wasm = cast("str", interpreter.python_wasm)
+        return TeelMiddleware(tool_name="py_eval", python_wasm=python_wasm, **options)
+    from langchain_quickjs import CodeInterpreterMiddleware
+
+    return CodeInterpreterMiddleware(tool_name="js_eval", **options)
+
+
 def _resolve_ptc_option(
     ptc: str | bool | list[str],
     *,
@@ -2649,8 +2689,9 @@ def create_cli_agent(
         enable_skills: Enable `SkillsMiddleware` for custom agent skills
         enable_shell: Enable shell execution via `LocalShellBackend`
             (only in local mode). When enabled, the `execute` tool is available.
-        enable_interpreter: Wire `CodeInterpreterMiddleware` from
-            `langchain-quickjs` into the main agent.
+        enable_interpreter: Wire `CodeInterpreterMiddleware` into the main
+            agent: `js_eval` from `langchain-quickjs`, or `py_eval` from
+            `langchain-teel` when `InterpreterConfig.backend` is `teel`.
 
             Local-mode only — passing a non-`None` `sandbox` while
             `enable_interpreter=True` raises `ValueError`. Subagents do not
@@ -2659,7 +2700,7 @@ def create_cli_agent(
             PTC (`tools.*` host bridge) calls bypass `interrupt_on`/HITL
             approval, so `InterpreterConfig.ptc` is the only effective
             control over which host tools can be invoked from inside the
-            REPL. `js_eval` itself is intentionally not gated by HITL —
+            REPL. The interpreter tool itself is intentionally not gated by HITL —
             per-call approval would be unusably noisy and would not block
             PTC fan-out anyway. The `"safe"` preset is therefore restricted
             to tools that are already non-HITL outside the REPL (read-only
@@ -2668,7 +2709,8 @@ def create_cli_agent(
             list or `interpreter_ptc="all"` with
             `interpreter_ptc_acknowledge_unsafe=True`.
 
-            Requires the core `langchain-quickjs` dependency.
+            The `quickjs` backend uses the core `langchain-quickjs`
+            dependency; the `teel` backend needs the `teel` extra.
         interpreter_config: Resolver-backed interpreter settings snapshot.
 
             Direct callers may omit this to resolve one for the current
@@ -3140,7 +3182,6 @@ def create_cli_agent(
         from langchain_core._api import (  # noqa: PLC2701  # re-exported in _api.__all__
             suppress_langchain_beta_warning,
         )
-        from langchain_quickjs import CodeInterpreterMiddleware, PTCOption
 
         interpreter = interpreter_config or InterpreterConfig.from_resolver()
         ptc_names = _resolve_ptc_option(
@@ -3149,21 +3190,14 @@ def create_cli_agent(
             acknowledge_unsafe=interpreter.ptc_acknowledge_unsafe,
             auto_approve=auto_approve,
         )
-        ptc_option: PTCOption | None = (
-            cast("PTCOption", list(ptc_names)) if ptc_names is not None else None
-        )
         # `CodeInterpreterMiddleware` is decorated `@beta()`, which emits a
         # `LangChainBetaWarning` on every instantiation. We intentionally use it
         # and the warning is not actionable for users, so suppress it.
         with suppress_langchain_beta_warning():
             agent_middleware.append(
-                CodeInterpreterMiddleware(
-                    tool_name="js_eval",
-                    timeout=interpreter.timeout_seconds,
-                    memory_limit=interpreter.memory_limit_mb * 1024 * 1024,
-                    max_ptc_calls=interpreter.max_ptc_calls,
-                    max_result_chars=interpreter.max_result_chars,
-                    ptc=ptc_option,
+                _build_interpreter_middleware(
+                    interpreter,
+                    ptc=list(ptc_names) if ptc_names is not None else None,
                 )
             )
 

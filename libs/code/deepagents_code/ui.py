@@ -230,7 +230,7 @@ def show_help() -> None:
     )
     console.print(
         "  --interpreter, --no-interpreter"
-        "  Enable or disable JS interpreter (`js_eval`) middleware"
+        "  Enable or disable the code interpreter (`js_eval` or `py_eval`)"
     )
     console.print(
         "                             Enabled by default when not using a sandbox"

@@ -1256,14 +1256,14 @@ def _interpreter_sandbox_conflict(sandbox_type: str, deciding_rank: int) -> str:
 
     if deciding_rank == MANAGED_RANK:
         remedy = (
-            "Managed policy requires the JS interpreter, so this sandbox "
+            "Managed policy requires the code interpreter, so this sandbox "
             "cannot be used. Drop --sandbox or ask your administrator to "
             "unset interpreter.enable_interpreter."
         )
     else:
         remedy = "Drop --sandbox or drop --interpreter."
     return (
-        "the JS interpreter is not supported with the "
+        "the code interpreter is not supported with the "
         f"{sandbox_type} sandbox in this release. {remedy}"
     )
 
@@ -1458,7 +1458,7 @@ def _ensure_yolo_acknowledged(console: "Console") -> bool:
 def _warn_if_interpreter_disabled_by_sandbox(args: argparse.Namespace) -> None:
     """Warn that a remote sandbox suppressed the otherwise-default interpreter.
 
-    With `js_eval` on by default in local mode, a `--sandbox` run silently drops
+    With the interpreter on by default in local mode, a `--sandbox` run silently drops
     it (the middleware is unsupported under a remote sandbox). This prints to
     stderr on the non-interactive (`-n`) path; the interactive TUI surfaces the
     same advisory as a startup notification (see
@@ -1489,7 +1489,7 @@ def _warn_if_interpreter_disabled_by_sandbox(args: argparse.Namespace) -> None:
     from rich.console import Console as _Console
 
     _Console(stderr=True).print(
-        "[yellow]Warning:[/yellow] JS interpreter (`js_eval`) is unavailable "
+        "[yellow]Warning:[/yellow] The code interpreter is unavailable "
         "under a remote sandbox; it runs in local mode only."
     )
 
@@ -2799,15 +2799,16 @@ def parse_args() -> argparse.Namespace:
         "--interpreter",
         action=argparse.BooleanOptionalAction,
         default=None,
-        help="Enable the JS interpreter (`js_eval`) middleware on the main agent. "
-        "Enabled by default when not using a sandbox; use --no-interpreter to disable.",
+        help="Enable the code interpreter on the main agent: `js_eval` (QuickJS), "
+        "or `py_eval` when interpreter.backend is 'teel'. Enabled by default when "
+        "not using a sandbox; use --no-interpreter to disable.",
     )
     parser.add_argument(
         "--interpreter-tools",
         dest="interpreter_tools",
         metavar="VALUE",
-        help="PTC allowlist for `js_eval`: 'safe', 'all', or a comma-separated "
-        "list of tool names (which may include the 'safe' preset, e.g. "
+        help="PTC allowlist for the code interpreter: 'safe', 'all', or a "
+        "comma-separated list of tool names (which may include the 'safe' preset, e.g. "
         "'safe,task'). Default is 'safe' (read-only file tools).",
     )
     parser.add_argument(
@@ -3213,13 +3214,13 @@ async def run_textual_cli_async(
         trust_project_extensions: Allow project-authored Python extensions for
             this session.
         extension_paths: Explicit one-run extension files or directories.
-        enable_interpreter: Enable `CodeInterpreterMiddleware` (`js_eval`) on
+        enable_interpreter: Enable `CodeInterpreterMiddleware` (`js_eval`/`py_eval`) on
             the main agent. `None` defers to the sandbox-aware/config default.
         interpreter_arg: The raw `--interpreter`/`--no-interpreter` tri-state,
             forwarded so the app can tell an explicit opt-out from a
             sandbox-suppressed default when surfacing the disabled-by-sandbox
             advisory.
-        interpreter_ptc: Invocation-scoped PTC allowlist override for `js_eval`.
+        interpreter_ptc: Invocation-scoped PTC allowlist override for the interpreter.
         interpreter_ptc_acknowledge_unsafe: Explicit acknowledgement for
             `interpreter_ptc="all"` outside of `auto_approve`.
         allow_fs_tools: Allowlist for `FilesystemMiddleware`'s `tools` param,
@@ -4931,16 +4932,22 @@ def _verify_interpreter_or_exit() -> None:
     """Run the interpreter pre-flight check; print and exit on failure.
 
     Called before spawning the langgraph dev server subprocess so a missing
-    `langchain-quickjs` dependency surfaces a one-line, actionable hint instead
-    of an opaque "Server process exited with code N" downstream. Gated on the
+    backend dependency (`langchain-quickjs`, or `langchain-teel` and its
+    `python.wasm`) or an invalid `[interpreter]` backend setting surfaces a
+    one-line, actionable hint instead of an opaque "Server process exited with
+    code N" downstream. Gated on the
     resolved interpreter state (`_resolve_interpreter_enabled`), not the
     `--interpreter` flag alone, since the interpreter is now on by default.
     """
+    from deepagents_code.configuration.interpreter import InterpreterConfig
     from deepagents_code.extras_info import verify_interpreter_deps
 
     try:
-        verify_interpreter_deps()
-    except ImportError as exc:
+        interpreter = InterpreterConfig.from_resolver()
+        verify_interpreter_deps(
+            interpreter.backend, python_wasm=interpreter.python_wasm
+        )
+    except (ImportError, ValueError) as exc:
         from rich.markup import escape
 
         from deepagents_code.config import console

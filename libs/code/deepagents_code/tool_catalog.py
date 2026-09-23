@@ -210,7 +210,7 @@ def collect_built_in_tools(
 
     Args:
         assistant_id: Resolved dcode agent identifier to compile.
-        enable_interpreter: Wire the JS interpreter middleware so `js_eval`
+        enable_interpreter: Wire the interpreter middleware so `js_eval`/`py_eval`
             appears when the default agent would bind it. Callers should pass
             the resolved runtime setting (see `_resolve_enable_interpreter`) so
             the list matches the tools the agent actually binds.
@@ -540,7 +540,7 @@ def collect_catalog(
     Args:
         assistant_id: Resolved dcode agent identifier to compile for built-in
             tools, including any agent-specific subagents.
-        enable_interpreter: Whether the default agent binds `js_eval`; forwarded
+        enable_interpreter: Whether the default agent binds the interpreter; forwarded
             to `collect_built_in_tools`.
         fs_tools: Filesystem tool allowlist; forwarded to
             `collect_built_in_tools`, which filters the built-in enumeration so

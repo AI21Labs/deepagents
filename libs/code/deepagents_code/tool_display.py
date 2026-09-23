@@ -19,8 +19,15 @@ _HIDDEN_CHAR_MARKER = " [hidden chars removed]"
 """Marker appended to display values that had dangerous Unicode stripped, so
 users know the value was modified for safety."""
 
-JS_EVAL_HEADER_MAX_LENGTH = 120
-"""Width at which the `js_eval` header truncates the first code line.
+INTERPRETER_TOOL_NAMES = frozenset({"js_eval", "py_eval"})
+"""Code-interpreter tools: QuickJS's `js_eval` and teel's Python `py_eval`.
+
+Both take a `code` argument and emit the same `<stdout>`/`<result>`/`<error>`
+wire format, so they share one display path.
+"""
+
+INTERPRETER_HEADER_MAX_LENGTH = 120
+"""Width at which an interpreter tool's header truncates the first code line.
 
 Shared with `messages.py` so the "header truncates the first line" cutoff and
 the "offer a collapsible code block" threshold stay in lock-step from a single
@@ -235,8 +242,8 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
                 return f'{prefix} {tool_name}("{command}", timeout={timeout_str})'
             return f'{prefix} {tool_name}("{command}")'
 
-    elif tool_name == "js_eval":
-        # JS interpreter: show only the first non-blank line of the snippet so a
+    elif tool_name in INTERPRETER_TOOL_NAMES:
+        # Code interpreter: show only the first non-blank line of the snippet so a
         # multi-line program collapses to a single, scannable header line. The
         # full code is available via the collapsible args block.
         code = tool_args.get("code")
@@ -246,7 +253,7 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
             ).strip()
             multiline = sum(1 for line in code.splitlines() if line.strip()) > 1
             snippet = _sanitize_display_value(
-                first_line, max_length=JS_EVAL_HEADER_MAX_LENGTH
+                first_line, max_length=INTERPRETER_HEADER_MAX_LENGTH
             )
             ellipsis = get_glyphs().ellipsis if multiline else ""
             return f'{prefix} {tool_name}("{snippet}{ellipsis}")'

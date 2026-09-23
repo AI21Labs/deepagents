@@ -345,8 +345,8 @@ async def start_server_and_get_agent(
         sandbox_setup: Path to setup script for the sandbox.
         enable_shell: Enable shell execution tools.
         enable_ask_user: Enable ask_user tool.
-        enable_interpreter: Enable the JS interpreter (`js_eval`) middleware on
-            the main agent. `None` uses the sandbox-aware default.
+        enable_interpreter: Enable the code interpreter (`js_eval`/`py_eval`)
+            middleware on the main agent. `None` uses the sandbox-aware default.
         interpreter_ptc: Invocation-scoped PTC allowlist override.
         interpreter_ptc_acknowledge_unsafe: Explicit acknowledgement for
             `interpreter_ptc="all"` outside of `auto_approve`.
@@ -549,8 +549,8 @@ async def server_session(
         sandbox_setup: Path to setup script for the sandbox.
         enable_shell: Enable shell execution tools.
         enable_ask_user: Enable ask_user tool.
-        enable_interpreter: Enable the JS interpreter (`js_eval`) middleware on
-            the main agent. `None` uses the sandbox-aware default.
+        enable_interpreter: Enable the code interpreter (`js_eval`/`py_eval`)
+            middleware on the main agent. `None` uses the sandbox-aware default.
         interpreter_ptc: Invocation-scoped PTC allowlist override.
         interpreter_ptc_acknowledge_unsafe: Explicit acknowledgement for
             `interpreter_ptc="all"` outside of `auto_approve`.

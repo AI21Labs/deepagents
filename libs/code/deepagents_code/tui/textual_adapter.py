@@ -2132,8 +2132,8 @@ async def execute_task_textual(
                 is_main_agent = ns_key == ()
 
                 # Handle CUSTOM stream - live subagent fan-out events emitted by
-                # the QuickJS task() bridge during a js_eval call. Validate at
-                # this boundary before forwarding so unrelated/malformed or
+                # the interpreter's task() bridge during a js_eval/py_eval call.
+                # Validate at this boundary before forwarding so unrelated/malformed or
                 # nested custom events never reach the panel; forwarding must
                 # never raise into the stream loop.
                 if current_stream_mode == "custom":

@@ -68,9 +68,10 @@ def _run_tools_list(args: argparse.Namespace) -> int:
     Enumerates the real tool objects the agent binds (see
     `tool_catalog.collect_catalog`) so names and descriptions never drift from
     what the model sees. The same runtime options that shape the agent's tool
-    set are honored: the resolved interpreter setting controls whether `js_eval`
-    is listed, `--allow-fs-tools` restricts filesystem tools, and the MCP options
-    (`--no-mcp`, `--mcp-config`, `--trust-project-mcp`) control MCP discovery.
+    set are honored: the resolved interpreter settings control whether
+    `js_eval` or `py_eval` is listed, `--allow-fs-tools` restricts filesystem
+    tools, and the MCP options (`--no-mcp`, `--mcp-config`,
+    `--trust-project-mcp`) control MCP discovery.
     Those are top-level flags, so
     they must precede the subcommand (e.g. `dcode --no-mcp tools list`).
 

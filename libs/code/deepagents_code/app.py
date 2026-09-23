@@ -4941,7 +4941,7 @@ class DeepAgentsApp(App):
             )
             yield Container(id="messages")
         with _BottomChrome(id="bottom-app-container"):
-            # Live fan-out panel for subagents spawned from js_eval. Hidden
+            # Live fan-out panel for subagents spawned from the interpreter. Hidden
             # until the first spawn event; sits at the top of the bottom
             # container, above the startup tip and input.
             yield SubagentPanel(id="subagent-panel")
@@ -5162,7 +5162,7 @@ class DeepAgentsApp(App):
     def _notify_interpreter_disabled_by_sandbox(self) -> None:
         """Toast when a remote sandbox suppressed the otherwise-default interpreter.
 
-        `js_eval` is on by default in local mode but unsupported under a remote
+        The interpreter is on by default in local mode but unsupported under a remote
         sandbox, so a `--sandbox` run silently drops it. A stderr line would be
         clobbered by the alternate screen, so the advisory is surfaced here as a
         startup notification — the TUI counterpart of the non-interactive warning
@@ -5191,7 +5191,7 @@ class DeepAgentsApp(App):
         ):
             return
         self.notify(
-            "JS interpreter (js_eval) is unavailable under a remote sandbox; "
+            "The code interpreter is unavailable under a remote sandbox; "
             "it runs in local mode only.",
             severity="warning",
             markup=False,

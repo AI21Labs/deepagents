@@ -333,6 +333,20 @@ settable via `[history].retention_days` in config.toml (managed config takes
 precedence).
 """
 
+INTERPRETER_BACKEND = "DEEPAGENTS_CODE_INTERPRETER_BACKEND"
+"""Interpreter backend for the main agent's code tool.
+
+`quickjs` (default) runs JavaScript as `js_eval`; `teel` runs Python in teel's
+WebAssembly sandbox as `py_eval` and requires `INTERPRETER_PYTHON_WASM`. Also
+settable via `[interpreter].backend` in config.toml.
+"""
+
+INTERPRETER_PYTHON_WASM = "DEEPAGENTS_CODE_INTERPRETER_PYTHON_WASM"
+"""Path to teel's `python.wasm`, used when the interpreter backend is `teel`.
+
+Also settable via `[interpreter].python_wasm` in config.toml.
+"""
+
 INVOKED_AS = "DEEPAGENTS_CODE_INVOKED_AS"
 """Internal sentinel carrying the command name the user launched with.
 

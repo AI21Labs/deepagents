@@ -1,13 +1,13 @@
-"""Live panel showing subagents fanned out from within `js_eval` calls.
+"""Live panel showing subagents fanned out from within interpreter calls.
 
 When the agent writes code that calls the top-level `task()` global, each
-dispatch runs as a subagent *inside* a single `js_eval` tool call which is
-invisible to the normal message stream. The QuickJS task bridge emits
+dispatch runs as a subagent *inside* a single `js_eval`/`py_eval` tool call
+which is invisible to the normal message stream. The interpreter's task bridge emits
 lifecycle events on the custom stream. This widget consumes them and renders
 a docked, live-updating fan-out panel.
 
 Trust note: `description`/`subagent_type` and `error` strings originate
-from LLM-authored JavaScript executed in the sandbox, so they are untrusted.
+from LLM-authored code executed in the sandbox, so they are untrusted.
 We route every rendered string through `sanitize_control_chars` which strips
 control/escape/bidi characters and only ever render via `Content.styled` /
 `markup=False` `Static` updates, so embedded Textual markup and terminal
@@ -101,10 +101,10 @@ class _SubagentRecord:
 
 @dataclass
 class _Phase:
-    """One `js_eval` fan-out batch, keyed by the eval's tool-call id."""
+    """One interpreter fan-out batch, keyed by the eval's tool-call id."""
 
     eval_id: str
-    """Parent `js_eval` tool-call id, or empty string when none was provided."""
+    """Parent interpreter tool-call id, or empty string when none was provided."""
 
     index: int
     """1-based display ordinal assigned when the phase is created."""
@@ -210,9 +210,9 @@ def _sanitize(text: str, *, max_chars: int) -> str:
 
 
 class SubagentPanel(Vertical):
-    """Docked two-pane panel visualizing `js_eval` subagent fan-out by phase.
+    """Docked two-pane panel visualizing interpreter subagent fan-out by phase.
 
-    Hidden until the first spawn event. Phases (one per `js_eval`) list on the
+    Hidden until the first spawn event. Phases (one per interpreter call) list on the
     left and the selected phase's subagents render as a scrollable table on the
     right. Focus the panel and use up/down to revisit finished phases. Expands
     while any phase runs, collapses to the header when the turn goes idle, and
@@ -589,7 +589,7 @@ class SubagentPanel(Vertical):
     def finalize_running(self) -> None:
         """Mark any still-running subagents as cancelled and stop ticking.
 
-        Called when a turn is interrupted: the QuickJS bridge does not emit
+        Called when a turn is interrupted: the interpreter bridge does not emit
         terminal events for `asyncio.CancelledError` (a BaseException, so it
         bypasses the bridge's `except Exception`), which would otherwise leave
         rows spinning forever. Freezes each affected row's elapsed time.

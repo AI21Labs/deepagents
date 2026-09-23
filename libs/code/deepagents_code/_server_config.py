@@ -370,7 +370,7 @@ def _interpreter_suppressed_by_sandbox(
     user made no explicit choice, a remote sandbox is active, and the local
     default would have enabled it — i.e. the sandbox (not an explicit
     `--no-interpreter` opt-out, nor a disabled `[interpreter]` config) is why
-    `js_eval` is unavailable.
+    the interpreter is unavailable.
 
     Takes the *raw* tri-state caller intent rather than the resolved boolean: a
     sandbox-suppressed default and an explicit `--no-interpreter` both resolve to
@@ -460,7 +460,7 @@ class ServerConfig:
     """Enable the skills subsystem (SKILL.md loading and skill tools)."""
 
     enable_interpreter: bool = False
-    """Enable `CodeInterpreterMiddleware` (`js_eval` REPL) on the main agent.
+    """Enable `CodeInterpreterMiddleware` (`js_eval`/`py_eval` REPL) on the main agent.
 
     Always the resolved concrete value: `from_cli_args` collapses the tri-state
     caller option via `_resolve_enable_interpreter` before constructing the

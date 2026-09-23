@@ -70,6 +70,7 @@ logger = logging.getLogger(__name__)
 # their runtime consumers.
 
 INTERPRETER_ENABLE_DEFAULT = True
+INTERPRETER_BACKEND_DEFAULT = "quickjs"
 INTERPRETER_TIMEOUT_SECONDS_DEFAULT = 5.0
 INTERPRETER_MEMORY_LIMIT_MB_DEFAULT = 64
 INTERPRETER_MAX_PTC_CALLS_DEFAULT = 256
@@ -2681,7 +2682,7 @@ _STATIC_OPTIONS: tuple[ConfigOption[object], ...] = (
     ConfigOption(
         key="interpreter.enable_interpreter",
         group="Interpreter",
-        summary="Wire the QuickJS REPL middleware into the main agent (local only).",
+        summary="Wire the interpreter middleware into the main agent (local only).",
         kind=OptionKind.BOOL,
         default=INTERPRETER_ENABLE_DEFAULT,
         toml_keys=("interpreter", "enable_interpreter"),
@@ -2689,9 +2690,29 @@ _STATIC_OPTIONS: tuple[ConfigOption[object], ...] = (
         cli=CliSpec("--interpreter"),
     ),
     ConfigOption(
+        key="interpreter.backend",
+        group="Interpreter",
+        summary=(
+            "Interpreter backend: 'quickjs' (JavaScript, `js_eval`) or 'teel' "
+            "(sandboxed Python, `py_eval`)."
+        ),
+        kind=OptionKind.STR,
+        default=INTERPRETER_BACKEND_DEFAULT,
+        env_var=_env_vars.INTERPRETER_BACKEND,
+        toml_keys=("interpreter", "backend"),
+    ),
+    ConfigOption(
+        key="interpreter.python_wasm",
+        group="Interpreter",
+        summary="Path to teel's python.wasm (required by the 'teel' backend).",
+        kind=OptionKind.STR,
+        env_var=_env_vars.INTERPRETER_PYTHON_WASM,
+        toml_keys=("interpreter", "python_wasm"),
+    ),
+    ConfigOption(
         key="interpreter.timeout_seconds",
         group="Interpreter",
-        summary="Per-call wall-clock timeout for the QuickJS REPL.",
+        summary="Per-call compute timeout (seconds) for the interpreter.",
         kind=OptionKind.FLOAT,
         default=INTERPRETER_TIMEOUT_SECONDS_DEFAULT,
         toml_keys=("interpreter", "timeout_seconds"),
@@ -2699,7 +2720,7 @@ _STATIC_OPTIONS: tuple[ConfigOption[object], ...] = (
     ConfigOption(
         key="interpreter.memory_limit_mb",
         group="Interpreter",
-        summary="QuickJS heap memory cap (MB) shared across a session.",
+        summary="Interpreter memory cap (MB).",
         kind=OptionKind.INT,
         default=INTERPRETER_MEMORY_LIMIT_MB_DEFAULT,
         toml_keys=("interpreter", "memory_limit_mb"),
@@ -2707,7 +2728,7 @@ _STATIC_OPTIONS: tuple[ConfigOption[object], ...] = (
     ConfigOption(
         key="interpreter.max_ptc_calls",
         group="Interpreter",
-        summary="Maximum tools.* host-bridge invocations per js_eval call.",
+        summary="Maximum tools.* host-bridge invocations per interpreter call.",
         kind=OptionKind.INT,
         default=INTERPRETER_MAX_PTC_CALLS_DEFAULT,
         toml_keys=("interpreter", "max_ptc_calls"),
@@ -2715,7 +2736,7 @@ _STATIC_OPTIONS: tuple[ConfigOption[object], ...] = (
     ConfigOption(
         key="interpreter.max_result_chars",
         group="Interpreter",
-        summary="Cap (chars) on js_eval result and stdout before truncation.",
+        summary="Cap (chars) on interpreter result and stdout before truncation.",
         kind=OptionKind.INT,
         default=INTERPRETER_MAX_RESULT_CHARS_DEFAULT,
         toml_keys=("interpreter", "max_result_chars"),

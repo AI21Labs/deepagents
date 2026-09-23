@@ -2663,9 +2663,9 @@ async def run_non_interactive(
         trust_project_mcp: When `True`, allow project-level stdio MCP
             servers. When `False` (default), project stdio servers are
             silently skipped.
-        enable_interpreter: Enable the JS interpreter (`js_eval`) middleware
+        enable_interpreter: Enable the code interpreter (`js_eval`/`py_eval`) middleware
             on the main agent. `None` uses the sandbox-aware default.
-        interpreter_ptc: Invocation-scoped PTC allowlist override for `js_eval`.
+        interpreter_ptc: Invocation-scoped PTC allowlist override for the interpreter.
         interpreter_ptc_acknowledge_unsafe: Explicit acknowledgement for
             `interpreter_ptc="all"` outside of `auto_approve`.
         allow_fs_tools: Allowlist for `FilesystemMiddleware`'s `tools` param,

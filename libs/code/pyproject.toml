@@ -149,6 +149,8 @@ all-sandboxes = [
 media = ["av>=18.0.0,<19.0.0", "pillow>=12.3.0,<13.0.0"]
 # (quickjs kept for backwards-compatible install commands)
 quickjs = []
+# Sandboxed Python interpreter backend (`interpreter.backend = "teel"`).
+teel = ["langchain-teel>=0.0.1,<0.1.0"]
 
 
 [project.scripts]
@@ -216,6 +218,7 @@ deepagents-acp = { path = "../acp", editable = true }
 langchain-daytona = { path = "../partners/daytona", editable = true }
 langchain-modal = { path = "../partners/modal", editable = true }
 langchain-quickjs = { path = "../partners/quickjs", editable = true }
+langchain-teel = { path = "../partners/teel", editable = true }
 langchain-runloop = { path = "../partners/runloop", editable = true }
 langchain-vercel-sandbox = { path = "../partners/vercel", editable = true }
 
@@ -226,6 +229,7 @@ extra-paths = [
     "../partners/daytona",
     "../partners/modal",
     "../partners/quickjs",
+    "../partners/teel",
     "../partners/runloop",
     "../partners/vercel",
 ]

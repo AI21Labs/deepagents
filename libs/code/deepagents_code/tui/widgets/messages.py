@@ -55,15 +55,16 @@ from deepagents_code.formatting import format_duration
 from deepagents_code.input import EMAIL_PREFIX_PATTERN, INPUT_HIGHLIGHT_PATTERN
 from deepagents_code.tool_display import (
     EXECUTE_HEADER_MAX_LENGTH,
-    JS_EVAL_HEADER_MAX_LENGTH,
+    INTERPRETER_HEADER_MAX_LENGTH,
+    INTERPRETER_TOOL_NAMES,
     format_tool_display,
 )
-from deepagents_code.tui.widgets._js_eval_display import (
-    JsEvalBlock,
-    JsEvalError,
-    JsEvalResult,
-    JsEvalStdout,
-    parse_js_eval_blocks,
+from deepagents_code.tui.widgets._interpreter_display import (
+    InterpreterBlock,
+    InterpreterError,
+    InterpreterResult,
+    InterpreterStdout,
+    parse_interpreter_blocks,
 )
 from deepagents_code.tui.widgets._links import (
     event_targets_link,
@@ -226,7 +227,8 @@ _TOOLS_WITH_HEADER_INFO: set[str] = {
     "glob",
     "grep",
     "execute",  # sandbox shell
-    "js_eval",  # JS interpreter
+    "js_eval",  # JS interpreter (quickjs)
+    "py_eval",  # Python interpreter (teel)
     # Web tools
     "web_search",
     "fetch_url",
@@ -1948,8 +1950,8 @@ class ToolCallMessage(Vertical):
     _PREVIEW_CHARS = 400
     """Maximum number of characters to show in preview mode."""
 
-    _JS_EVAL_INLINE_RESULT_MAX = 80
-    """Maximum single-line `js_eval` result length rendered inline.
+    _INTERPRETER_INLINE_RESULT_MAX = 80
+    """Maximum single-line interpreter result length rendered inline.
 
     Inline rendering uses `result: value` rather than a standalone labeled block.
     """
@@ -2768,11 +2770,11 @@ class ToolCallMessage(Vertical):
 
         A click on the header/args region (the truncated command or code line
         and its hint) toggles the collapsible args/code block directly, so an
-        `execute` command or `js_eval` program can be expanded even when the
+        `execute` command or interpreter program can be expanded even when the
         output below it is *also* expandable. A `task` row routes clicks on its
         description region to the description toggle for the same reason.
         Otherwise prefer toggling output, falling through to the args/code block
-        only when the output can't expand — `js_eval` commonly has a short,
+        only when the output can't expand — an interpreter call commonly has a short,
         unexpandable result sitting below a multi-line, collapsible code block,
         and the old "output wins whenever it exists" rule left that code block
         stuck.
@@ -2910,7 +2912,8 @@ class ToolCallMessage(Vertical):
             "grep": self._format_search_output,
             "glob": self._format_search_output,
             "execute": self._format_shell_output,
-            "js_eval": self._format_js_eval_output,
+            "js_eval": self._format_interpreter_output,
+            "py_eval": self._format_interpreter_output,
             "web_search": self._format_web_output,
             "fetch_url": self._format_web_output,
             "task": self._format_task_output,
@@ -2962,7 +2965,7 @@ class ToolCallMessage(Vertical):
 
         Public wrapper around `_has_expandable_output` so toggle routing (click
         and Ctrl+O) can tell "has output" apart from "has output that can
-        actually expand/collapse". `js_eval` results are frequently short and
+        actually expand/collapse". Interpreter results are frequently short and
         unexpandable while the code block above them *is* collapsible, so the
         routing must fall through to args when output cannot toggle.
         """
@@ -3611,10 +3614,10 @@ class ToolCallMessage(Vertical):
 
         return FormattedOutput(content=content, truncation=truncation)
 
-    def _format_js_eval_output(
+    def _format_interpreter_output(
         self, output: str, *, is_preview: bool = False
     ) -> FormattedOutput:
-        """Format `js_eval` (JS interpreter) output.
+        """Format code-interpreter (`js_eval`/`py_eval`) output.
 
         Unwraps the REPL's `<stdout>` / `<result>` / `<error>` envelope into
         labeled, styled sections instead of dumping the raw XML-escaped blob.
@@ -3623,7 +3626,7 @@ class ToolCallMessage(Vertical):
             FormattedOutput with the formatted REPL output and optional
             truncation info.
         """
-        blocks = parse_js_eval_blocks(output)
+        blocks = parse_interpreter_blocks(output)
         if blocks is None:
             # Unexpected shape — fall back to plain line rendering.
             return self._format_lines_output(output.split("\n"), is_preview=is_preview)
@@ -3636,10 +3639,10 @@ class ToolCallMessage(Vertical):
         if len(blocks) == 1:
             block = blocks[0]
             if (
-                isinstance(block, JsEvalResult)
+                isinstance(block, InterpreterResult)
                 and not block.kind
                 and "\n" not in block.body
-                and len(block.body) <= self._JS_EVAL_INLINE_RESULT_MAX
+                and len(block.body) <= self._INTERPRETER_INLINE_RESULT_MAX
             ):
                 content = Content.assemble(
                     Content.styled("result: ", colors.success),
@@ -3685,17 +3688,17 @@ class ToolCallMessage(Vertical):
                 total_lines += 1
 
         for block in blocks:
-            if isinstance(block, JsEvalStdout):
+            if isinstance(block, InterpreterStdout):
                 add_section(Content.styled("stdout", "dim"), block.body)
-            elif isinstance(block, JsEvalError):
+            elif isinstance(block, InterpreterError):
                 header = f"error ({block.error_type})" if block.error_type else "error"
                 add_section(Content.styled(header, colors.error), block.body)
-            else:  # JsEvalResult
+            else:  # InterpreterResult
                 label = "result (handle)" if block.kind else "result"
                 add_section(Content.styled(label, colors.success), block.body)
 
         content = Content("\n").join(lines) if lines else Content("")
-        truncation = self._build_js_eval_truncation_hint(
+        truncation = self._build_interpreter_truncation_hint(
             blocks=blocks,
             shown_lines=total_lines,
             clipped_chars=clipped_chars,
@@ -3704,14 +3707,14 @@ class ToolCallMessage(Vertical):
         return FormattedOutput(content=content, truncation=truncation)
 
     @staticmethod
-    def _build_js_eval_truncation_hint(
+    def _build_interpreter_truncation_hint(
         *,
-        blocks: list[JsEvalBlock],
+        blocks: list[InterpreterBlock],
         shown_lines: int,
         clipped_chars: int,
         is_preview: bool,
     ) -> str | None:
-        """Quantify how much `js_eval` preview content was hidden.
+        """Quantify how much interpreter preview content was hidden.
 
         Prefers a hidden-line count over a hidden-char count (mirroring
         `_build_truncation_hint`): when whole sections were dropped, "N more
@@ -4284,8 +4287,8 @@ class ToolCallMessage(Vertical):
         """Whether the tool's args are large enough to deserve a collapsible block.
 
         - `ask_user`: its `questions` payload is too noisy to render inline.
-        - `js_eval`: the header shows only the first code line (truncated at
-            `JS_EVAL_HEADER_MAX_LENGTH`), so the full program is offered as a
+        - `js_eval`/`py_eval`: the header shows only the first code line (truncated at
+            `INTERPRETER_HEADER_MAX_LENGTH`), so the full program is offered as a
             collapsible block whenever it spans more than one non-blank line *or*
             a single line is long enough to be truncated in the header.
         - `execute`: the header truncates the shell command at
@@ -4295,11 +4298,13 @@ class ToolCallMessage(Vertical):
         """
         if self._tool_name == "ask_user":
             return bool(self._args)
-        if self._tool_name == "js_eval":
+        if self._tool_name in INTERPRETER_TOOL_NAMES:
             code = self._args.get("code")
             if isinstance(code, str) and code.strip():
                 non_blank = sum(1 for line in code.splitlines() if line.strip())
-                return non_blank > 1 or len(code.strip()) > JS_EVAL_HEADER_MAX_LENGTH
+                return (
+                    non_blank > 1 or len(code.strip()) > INTERPRETER_HEADER_MAX_LENGTH
+                )
         if self._tool_name == "execute":
             command = self._args.get("command")
             if isinstance(command, str) and command.strip():
@@ -4373,11 +4378,11 @@ class ToolCallMessage(Vertical):
         self._task_desc_hint_widget.display = True
 
     def _format_code_detail(self) -> Content:
-        """Render the `js_eval` program for the collapsible code block.
+        """Render the interpreter program for the collapsible code block.
 
         The code is shown verbatim and left-aligned (its own indentation is the
         only indentation), as plain uncolored `Content`. Blank lines of
-        top/bottom padding add breathing room between the `js_eval` header above
+        top/bottom padding add breathing room between the interpreter header above
         and the "show/hide code" hint below.
 
         Returns:
@@ -4414,7 +4419,7 @@ class ToolCallMessage(Vertical):
         Renders JSON-pretty-printed args, falling back to `str(self._args)`
         (with a visible marker) when JSON serialization fails — `default=str`
         already handles most non-serializable values, so reaching the fallback
-        indicates a deeper issue worth logging. `js_eval` code is handled
+        indicates a deeper issue worth logging. Interpreter code is handled
         separately by `_format_code_detail`.
 
         Returns:
@@ -4444,7 +4449,7 @@ class ToolCallMessage(Vertical):
             self._args_hint_widget.display = False
             return
 
-        if self._tool_name == "js_eval":
+        if self._tool_name in INTERPRETER_TOOL_NAMES:
             noun, detail_fn = "code", self._format_code_detail
         elif self._tool_name == "execute":
             noun, detail_fn = "command", self._format_command_detail
@@ -4491,6 +4496,7 @@ _TOOL_SUMMARY_CATEGORY: dict[str, str] = {
     "glob": "search",
     "execute": "shell",
     "js_eval": "js",
+    "py_eval": "py",
     "web_search": "web_search",
     "fetch_url": "fetch",
     "task": "task",
@@ -4507,6 +4513,7 @@ _TOOL_SUMMARY_PHRASES: dict[str, tuple[str, str, str, str]] = {
     "search": ("Searching for", "Searched for", "pattern", "patterns"),
     "shell": ("Running", "Ran", "shell command", "shell commands"),
     "js": ("Running", "Ran", "JS evaluation", "JS evaluations"),
+    "py": ("Running", "Ran", "Python evaluation", "Python evaluations"),
     "fetch": ("Fetching", "Fetched", "URL", "URLs"),
     "task": ("Running", "Ran", "agent", "agents"),
 }
@@ -4516,7 +4523,7 @@ _TOOL_SUMMARY_PHRASES: dict[str, tuple[str, str, str, str]] = {
 # their counts claim "N distinct things", so repeat calls on one target must
 # collapse (see `_tally_categories`).
 #
-# Every other category is absent on purpose. "shell", "js", "task", and "search"
+# Every other category is absent on purpose. "shell", "js", "py", "task", and "search"
 # count attempts, not objects — running one command or grepping one pattern twice
 # is genuinely two pieces of work. "web_search" phrases its own repeats
 # ("Searched the web 2 times") and "todos" carries no count at all. "ls" is

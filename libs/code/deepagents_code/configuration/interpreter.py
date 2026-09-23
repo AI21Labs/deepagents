@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 from deepagents_code.config_manifest import _emit_ranked_diagnostics, get_option
 from deepagents_code.configuration.resolver import get_config_resolver
@@ -14,7 +14,13 @@ if TYPE_CHECKING:
     from deepagents_code.config_manifest import ConfigOption
     from deepagents_code.configuration.resolver import ConfigResolver, ResolvedValue
 
+InterpreterBackend = Literal["quickjs", "teel"]
+
+_BACKENDS: tuple[InterpreterBackend, ...] = ("quickjs", "teel")
+
 _INTERPRETER_KEYS = (
+    "interpreter.backend",
+    "interpreter.python_wasm",
     "interpreter.timeout_seconds",
     "interpreter.memory_limit_mb",
     "interpreter.max_ptc_calls",
@@ -56,6 +62,29 @@ class InterpreterConfig:
     max_result_chars: int
     ptc: str | bool | list[str]
     ptc_acknowledge_unsafe: bool
+    backend: InterpreterBackend = "quickjs"
+    """`quickjs` runs JavaScript as `js_eval`; `teel` runs Python as `py_eval`."""
+    python_wasm: str | None = None
+    """Path to teel's `python.wasm`; required when `backend` is `teel`."""
+
+    def __post_init__(self) -> None:
+        """Reject an unknown backend or a `teel` backend without `python.wasm`.
+
+        Raises:
+            ValueError: If the backend is unknown or `python_wasm` is missing.
+        """
+        if self.backend not in _BACKENDS:
+            msg = (
+                f"interpreter.backend must be one of {', '.join(_BACKENDS)}; "
+                f"got {self.backend!r}"
+            )
+            raise ValueError(msg)
+        if self.backend == "teel" and not self.python_wasm:
+            msg = (
+                "interpreter.backend='teel' requires interpreter.python_wasm "
+                "(the path to teel's python.wasm)"
+            )
+            raise ValueError(msg)
 
     @classmethod
     def from_resolver(
@@ -87,4 +116,10 @@ class InterpreterConfig:
                 ptc_acknowledge_unsafe
                 or bool(values["interpreter.ptc_acknowledge_unsafe"].value)
             ),
+            backend=cast(
+                "InterpreterBackend",
+                str(values["interpreter.backend"].value).strip().lower(),
+            ),
+            python_wasm=cast("str | None", values["interpreter.python_wasm"].value)
+            or None,
         )
