@@ -2,6 +2,18 @@
 
 # Changelog
 
+## [0.0.13](https://github.com/AI21Labs/deepagents/compare/deepagents-acp==0.0.12...deepagents-acp==0.0.13) (2026-09-23)
+
+
+### Features
+
+* **acp:** stream visible reasoning as thought chunks ([#5880](https://github.com/AI21Labs/deepagents/issues/5880)) ([7e96bf0](https://github.com/AI21Labs/deepagents/commit/7e96bf0ab1494217251010a30d27198d0c9532c9))
+
+
+### Bug Fixes
+
+* **acp:** scope cancel() to the requested session ([#5107](https://github.com/AI21Labs/deepagents/issues/5107)) ([96236d2](https://github.com/AI21Labs/deepagents/commit/96236d275f6799eeed80235eaa2054ee0e5bc8b7))
+
 ## [0.0.12](https://github.com/langchain-ai/deepagents/compare/deepagents-acp==0.0.11...deepagents-acp==0.0.12) (2026-09-18)
 
 ### Bug Fixes
